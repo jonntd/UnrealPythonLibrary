@@ -44,4 +44,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Unreal Python")
 		static void ExecutePythonScript(FString PythonScript);
 
+	UFUNCTION(BlueprintCallable, Category = "Unreal Python")
+		static UPoseAsset* CreatePoseFromAnimation(UAnimSequence* SourceAnimation, TArray<FString> PoseNamesh);
+
+	UFUNCTION(BlueprintCallable, Category = "Unreal Python")
+		static void WorldCreateFolder(FName path);
+
+	UFUNCTION(BlueprintCallable, Category = "Unreal Python")
+		static int Test();
+
 };
