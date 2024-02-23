@@ -32,14 +32,22 @@ print(create_pose_from_animation)
 
 current_level = le_system.get_current_level()
 world = ue_system.get_editor_world()
-
 unreal.SystemLibrary.execute_console_command(world,"CAMERA ALIGN ACTIVEVIEWPORTONLY")
-
 unreal.PythonScriptLibrary.execute_python_command
-
 unreal.CppLib.execute_console_command("CAMERA ALIGN ACTIVEVIEWPORTONLY")
-
 unreal.CppLib.world_create_folder("/dddd/dddsss/ss")
+
+
+animation_blueprint = unreal.load_asset('/Game/MetaHumans/Common/Female/Medium/NormalWeight/Body/f_med_nrw_animbp.f_med_nrw_animbp')
+
+animation_graphs = animation_blueprint.get_animation_graphs()
+animation_graphs = animation_blueprint.get_nodes_of_class()
+
+print(dir(animation_graphs))
+
+
+
+unreal.PoseDriverConnect.import_pose_drivers_from_json
 
 
 
@@ -619,6 +627,7 @@ world = ue_system.get_editor_world()
 actor_list = unreal.GameplayStatics.get_all_actors_of_class(world, unreal.CineCameraActor)
 for actor in actor_list:
     camera_component = actor.get_cine_camera_component()
+    print(camera_component)
     # camera_component.focus_settings.set_editor_property("focus_method", unreal.CameraFocusMethod.DISABLE)
     _focusSettings = unreal.CameraFocusSettings()
     _focusSettings.manual_focus_distance = 1320.0
@@ -631,9 +640,6 @@ unreal.LevelSequenceEditorBlueprintLibrary.refresh_current_level_sequence()
 le_system.save_current_level()
 # unreal.EditorAssetLibrary.save_asset(level_sequence_path)
 unreal.EditorAssetLibrary.save_loaded_asset(level_sequence)
-
-
-
 
 
 
@@ -661,14 +667,86 @@ unreal.LevelSequenceEditorBlueprintLibrary.refresh_current_level_sequence()
 
 
 
+level_sequence = unreal.load_asset('/Game/NewLevelSequence.NewLevelSequence')
+# unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(level_sequence)
+# level_sequence = unreal.LevelSequenceEditorBlueprintLibrary.get_current_level_sequence()
+for binding in level_sequence.get_bindings():
+    # print(binding.get_name())
+    if binding.get_name() == "Cine Camera Actor":
+        bound_objects = unreal.SequencerTools.get_bound_objects(ue_system.get_editor_world(),
+                                                                level_sequence,[binding],unreal.SequencerScriptingRange(
+                                                                    has_start_value=True,
+                                                                    has_end_value=True,
+                                                                    inclusive_start=level_sequence.get_playback_start(),
+                                                                    exclusive_end=level_sequence.get_playback_end()
+                                                                ))
+        cine_camera = binding.get_object_template()
+        _cineCameraComponent = cine_camera.get_editor_property("camera_component")
+        print(_cineCameraComponent)
+        _focusSettings = unreal.CameraFocusSettings()
+        _focusSettings.manual_focus_distance = 1320.0
+        _focusSettings.focus_method = unreal.CameraFocusMethod.DISABLE
+        _focusSettings.focus_offset = 19.0
+        _focusSettings.smooth_focus_changes = False
+        _cineCameraComponent.set_editor_property("focus_settings", _focusSettings)
+unreal.EditorAssetLibrary.save_loaded_asset(level_sequence)
 
 
 
 
 
 
+# Import built-in modules
+from collections import defaultdict
+import json
+import os
+
+# Import local modules
+import unreal
+
+DIR = os.path.dirname(os.path.abspath(__file__))
+
+def unreal_progress(tasks, label="进度", total=None):
+    total = total if total else len(tasks)
+    with unreal.ScopedSlowTask(total, label) as task:
+        task.make_dialog(True)
+        for i, item in enumerate(tasks):
+            if task.should_cancel():
+                break
+            task.enter_progress_frame(1, "%s %s/%s" % (label, i, total))
+            yield item
 
 
+def main():
+    # NOTE: 读取 sequence
+    sequence = unreal.load_asset('/Game/Sequencer/MetaHumanSample_Sequence.MetaHumanSample_Sequence')
+    # NOTE: 收集 sequence 里面所有的 binding
+    binding_dict = defaultdict(list)
+    for binding in sequence.get_bindings():
+        binding_dict[binding.get_name()].append(binding)
+
+    # NOTE: 遍历命名为 Face 的 binding
+    for binding in unreal_progress(binding_dict.get("Face", []), "导出 Face 数据"):
+        # NOTE: 获取关键帧 channel 数据
+        keys_dict = {}
+        for track in binding.get_tracks():
+            for section in track.get_sections():
+                for channel in unreal_progress(section.get_channels(), "导出关键帧"):
+                    if not channel.get_num_keys():
+                        continue
+                    keys = []
+                    for key in channel.get_keys():
+                        frame_time = key.get_time()
+                        frame = frame_time.frame_number.value + frame_time.sub_frame
+                        keys.append({"frame": frame, "value": key.get_value()})
+
+                    keys_dict[channel.get_name()] = keys
+
+        # NOTE: 导出 json
+        name = binding.get_parent().get_name()
+        export_path = os.path.join(DIR, "{0}.json".format(name))
+        with open(export_path, "w") as wf:
+            json.dump(keys_dict, wf, indent=4)
 
 
 
